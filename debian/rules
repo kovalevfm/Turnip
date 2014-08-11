@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+override_dh_clean:
+	rm -rf ./pyturnip/build
+	dh_clean $@
+
+override_dh_auto_install:
+	cd pyturnip && ./setup.py install --install-layout=deb --root ../debian/turnip
+	mkdir -p debian/turnip/etc/turnip
+	cp settings.conf debian/turnip/etc/turnip
+	mkdir -p debian/turnip/var/lib/turnip
+	cp -r init debian/turnip/etc/
+	dh_auto_install $@
+
+%:
+	dh $@ 
+
+

@@ -35,8 +35,8 @@ class Status(object):
 
 
 class Turnip(object):
-    def __init__(self, host='localhost', port=5544):
-        self.context = zmq.Context()
+    def __init__(self, host='localhost', port=5544, io_threads=1):
+        self.context = zmq.Context(io_threads=io_threads)
         self.socket = self.context.socket(zmq.REQ)
         self.socket.connect("tcp://{0}:{1}".format(host, port))
 
@@ -64,4 +64,16 @@ class Turnip(object):
         status = Status(message[0])
         return status
 
+    def write_batch(self, data, sync=False):
+        msg = msgpack.packb((Command.WRITE, [sync, [(False, key, value) for key, value in data]]))
+        self.socket.send(msg)
+        message = msgpack.unpackb(self.socket.recv())
+        status = Status(message[0])
+        return status
 
+    def delete_batch(self, keys, sync=False):
+        msg = msgpack.packb((Command.WRITE, [sync, [(False, key, '') for key in keys]]))
+        self.socket.send(msg)
+        message = msgpack.unpackb(self.socket.recv())
+        status = Status(message[0])
+        return status

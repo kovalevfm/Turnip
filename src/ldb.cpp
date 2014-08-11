@@ -10,24 +10,33 @@ void converStatus(leveldb::Status& ldb_status, Status* status){
         status->status.code = Status::NotFound;
         return;
     }
-    if (ldb_status.IsCorruption()){
-        status->status.code = Status::Corruption;
-        status->reason = ldb_status.ToString();
-        return;
-    }
-    if (ldb_status.IsIOError()){
-        status->status.code = Status::IOError;
-        status->reason = ldb_status.ToString();
-        return;
-    }
+//    if (ldb_status.IsCorruption()){
+//        status->status.code = Status::Corruption;
+//        status->reason = ldb_status.ToString();
+//        return;
+//    }
+//    if (ldb_status.IsIOError()){
+//       status->status.code = Status::IOError;
+//       status->reason = ldb_status.ToString();
+//        return;
+//   }
 }
 
-LDB::LDB(const Options& options) :cache(options.ldb_options.block_cache),  filter_policy(options.ldb_options.filter_policy){
+LDB::LDB(Options& options_) : options(options_)
+// cache(options.ldb_options.block_cache)/*,  filter_policy(options.ldb_options.filter_policy)*/
+{
     leveldb::Status status = leveldb::DB::Open(options.ldb_options, options.db_path.c_str(), &db);
 }
 
 LDB::~LDB(){
     delete db;
+    if (options.ldb_options.block_cache){
+        delete options.ldb_options.block_cache;
+    }
+    if (options.ldb_options.info_log){
+        delete options.ldb_options.info_log;
+    }
+
 //    if (filter_policy){
 //        delete filter_policy;
 //    }
@@ -59,3 +68,6 @@ void LDB::Write(const WriteRequest& request, WriteResponse* response){
     converStatus(status, &(response->status));
 }
 
+leveldb::Logger* LDB::getLogger(){
+    return options.ldb_options.info_log;
+}

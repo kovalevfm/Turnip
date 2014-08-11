@@ -3,6 +3,7 @@
 
 #include <string>
 #include <iostream>
+#include <cstdio>
 #include <leveldb/options.h>
 
 struct Options{
@@ -12,7 +13,6 @@ struct Options{
     leveldb::Options ldb_options;
 };
 
-Options loadOptions(std::istream& source);
-Options loadOptions(const std::string& path);
+Options loadOptions(FILE* f);
 
 #endif // OPTIONS_H

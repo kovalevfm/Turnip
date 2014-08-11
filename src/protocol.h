@@ -1,15 +1,11 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
-#include <unistd.h>
-#include <cassert>
 #include <string>
 #include <msgpack.hpp>
 #include <vector>
 
-
 enum class Command {GET=0, WRITE=1};
-//enum class Status {OK, NotFound, Corruption, NotSupported, InvalidArgument, IOError};
 
 struct Status {
     enum Code {

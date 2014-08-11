@@ -1,0 +1,22 @@
+Source: turnip
+Maintainer: Fedor Kovalev <kovalevfm@yandex-team.ru>
+Section: utils
+Priority: optional
+Build-Depends: debhelper (>= 7), python,
+	libleveldb-dev,
+	libconfig++8-dev,
+	libzmq3-dev,
+	libmsgpack-dev,
+	libsnappy-dev
+Standards-Version: 3.9.1
+
+Package: turnip
+Architecture: any
+Depends: ${misc:Depends}, ${python:Depends},
+	libzmq3,
+	libconfig++8,
+	libmsgpack3,
+	libsnappy1,
+	python-zmq,
+	msgpack-python,
+Description: key value server , store data on disk with leveldv, server on zmq, protocol via msgpack
