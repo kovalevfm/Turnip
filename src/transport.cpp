@@ -116,3 +116,11 @@ Status::Status(const leveldb::Status &ldb_status)
     }
 }
 
+
+
+RangeValue::RangeValue(leveldb::Iterator *it)
+{
+    status = it->status();
+    key.assign(it->key().data(), it->key().size());
+    value.assign(it->value().data(), it->value().size());
+}

@@ -5,6 +5,7 @@ import msgpack
 class Command(object):
     GET = 0
     WRITE = 1
+    RANGE = 2
 
 
 class Status(object):
@@ -110,3 +111,13 @@ class Turnip(object):
             if self.socket.getsockopt(zmq.EVENTS) & zmq.POLLIN == 0:
                 break
         return res
+
+    def get_range(self, begin_key, end_key, verify_checksums=False, fill_cache=False):
+        self.socket.send_multipart([msgpack.packb(Command.RANGE), msgpack.packb((verify_checksums, fill_cache)), msgpack.packb(begin_key), msgpack.packb(end_key)])
+        while True:
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
+            for o in self.unpacker:
+                yield o
+            if self.socket.getsockopt(zmq.EVENTS) & zmq.POLLIN == 0:
+                return

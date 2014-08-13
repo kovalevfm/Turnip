@@ -3,6 +3,7 @@
 #include <msgpack.hpp>
 #include <leveldb/options.h>
 #include <leveldb/status.h>
+#include <leveldb/iterator.h>
 #include <stdexcept>
 
 enum class Command {GET=0, WRITE=1, RANGE=2};
@@ -65,7 +66,13 @@ struct WriteOperation{
     MSGPACK_DEFINE(do_delete, key, value)
 };
 
-
+struct RangeValue{
+    RangeValue(leveldb::Iterator* it);
+    Status status;
+    std::string key;
+    std::string value;
+    MSGPACK_DEFINE(status, key, value)
+};
 
 class Transport
 {

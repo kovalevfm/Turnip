@@ -1,5 +1,7 @@
 #include "ldb.h"
 #include <leveldb/write_batch.h>
+#include <leveldb/iterator.h>
+#include <leveldb/comparator.h>
 
 
 LDB::LDB(Options& options_)
@@ -49,4 +51,23 @@ void LDB::Write(Transport* t){
     t->send_next(status);
 }
 
-
+void LDB::Range(Transport* t){
+    Message m = t->recv_next();
+    if (m.zone.get() == NULL) {throw format_error("range empty message");}
+    ReadOptions ro = m.messsage.as<ReadOptions>();
+    m = t->recv_next();
+    if (m.zone.get() == NULL) {throw format_error("range empty key 1");}
+    std::string begin_key = m.messsage.as<std::string>();
+    m = t->recv_next();
+    if (m.zone.get() == NULL) {throw format_error("range empty key 2");}
+    std::string end_key = m.messsage.as<std::string>();
+    m = t->recv_next();
+    if (m.zone.get() != NULL) {throw format_error("range too long request");}
+    std::unique_ptr<leveldb::Iterator> it(db->NewIterator(ro.get_leveldb_options()));
+    it->Seek(begin_key);
+    const leveldb::Comparator* cmp = leveldb::BytewiseComparator();
+    while (it->Valid() && (end_key.size() == 0 || cmp->Compare(it->key(), leveldb::Slice(end_key)) <= 0) ){
+        t->send_next(RangeValue(it.get()));
+        it->Next();
+    }
+}

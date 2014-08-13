@@ -25,6 +25,9 @@ void worker_routine (void *context, LDB* db, leveldb::Logger* logger)
             case (int)Command::WRITE:
                 db->Write(&t);
                 break;
+            case (int)Command::RANGE:
+                db->Range(&t);
+                break;
             }
         } catch (const std::bad_cast& e){
             t.read_tail();

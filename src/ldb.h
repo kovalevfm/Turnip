@@ -14,6 +14,7 @@ public:
 
     void Get(Transport* t);
     void Write(Transport* t);
+    void Range(Transport* t);
 
 private:
     leveldb::DB* db;
