@@ -6,13 +6,30 @@
 #include <cstdio>
 #include <leveldb/options.h>
 
-struct Options{
+class Options{
+public:
+    bool Load(const std::string& fname);
+    leveldb::Options get_ldb_options(){
+        return ldb_options;
+    }
+    const char* get_db_path(){
+        return db_path.c_str();
+    }
+    int get_threads_num(){return threads_num;}
+    int get_port(){return port;}
+    leveldb::Logger* get_logger(){return logger;}
+    virtual ~Options();
+
+private:
+    leveldb::Options ldb_options;
     std::string db_path;
     int threads_num;
     int port;
-    leveldb::Options ldb_options;
+    leveldb::Logger* logger;
+    leveldb::Cache* cache;
+
 };
 
-Options loadOptions(FILE* f);
+//Options loadOptions(const std::string& fname);
 
 #endif // OPTIONS_H

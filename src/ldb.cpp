@@ -1,73 +1,52 @@
 #include "ldb.h"
 #include <leveldb/write_batch.h>
 
-void converStatus(leveldb::Status& ldb_status, Status* status){
-    if (ldb_status.ok()){
-        status->status.code = Status::OK;
-        return;
-    }
-    if (ldb_status.IsNotFound()){
-        status->status.code = Status::NotFound;
-        return;
-    }
-//    if (ldb_status.IsCorruption()){
-//        status->status.code = Status::Corruption;
-//        status->reason = ldb_status.ToString();
-//        return;
-//    }
-//    if (ldb_status.IsIOError()){
-//       status->status.code = Status::IOError;
-//       status->reason = ldb_status.ToString();
-//        return;
-//   }
-}
 
-LDB::LDB(Options& options_) : options(options_)
-// cache(options.ldb_options.block_cache)/*,  filter_policy(options.ldb_options.filter_policy)*/
+LDB::LDB(Options& options_)
 {
-    leveldb::Status status = leveldb::DB::Open(options.ldb_options, options.db_path.c_str(), &db);
+    leveldb::Status status = leveldb::DB::Open(options_.get_ldb_options(), options_.get_db_path(), &db);
 }
 
 LDB::~LDB(){
     delete db;
-    if (options.ldb_options.block_cache){
-        delete options.ldb_options.block_cache;
-    }
-    if (options.ldb_options.info_log){
-        delete options.ldb_options.info_log;
-    }
-
-//    if (filter_policy){
-//        delete filter_policy;
-//    }
-//    if (cache){
-//        delete cache;
-//    }
 }
 
-void LDB::Get(const GetRequest& request, GetResponse* response){
-    leveldb::ReadOptions read_options;
-    read_options.fill_cache = request.fill_cache;
-    read_options.verify_checksums = request.verify_checksums;
-    leveldb::Status status = db->Get(read_options, request.key, &(response->value));
-    converStatus(status, &(response->status));
+void LDB::Get(Transport* t){
+    Message m = t->recv_next();
+    if (m.zone.get() == NULL) {throw format_error("get empty message");}
+    ReadOptions ro = m.messsage.as<ReadOptions>();
+    m = t->recv_next();
+    if (m.zone.get() == NULL) {throw format_error("get empty key");}
+    std::string result;
+    Status status = db->Get(ro.get_leveldb_options(), m.messsage.as<std::string>(), &result);
+    m = t->recv_next();
+    if (m.zone.get() != NULL) {throw format_error("get too long request");}
+    t->send_next(status);
+    if (status.code == (int)StatusCode::OK){
+        t->send_next(result);
+    }
 }
 
-void LDB::Write(const WriteRequest& request, WriteResponse* response){
-    leveldb::WriteOptions write_options;
-    write_options.sync = request.sync;
+void LDB::Write(Transport* t){
     leveldb::WriteBatch batch;
-    for (auto i = request.operations.begin(); i != request.operations.end() ; ++i ){
-        if (i->do_delete){
-            batch.Delete(i->key);
-        } else {
-            batch.Put(i->key, i->value);
+    Message m = t->recv_next();
+    if (m.zone.get() == NULL) {throw format_error("write empty message");}
+    WriteOptions wo = m.messsage.as<WriteOptions>();
+    WriteOperation o;
+    while(true){
+        m = t->recv_next();
+        if (m.zone.get() == NULL){
+            break;
+        }
+        m.messsage.convert(&o);
+        if (o.do_delete){
+            batch.Delete(o.key);
+        } else{
+            batch.Put(o.key, o.value);
         }
     }
-    leveldb::Status status = db->Write(write_options, &batch);
-    converStatus(status, &(response->status));
+    Status status = db->Write(wo.get_leveldb_options(), &batch);
+    t->send_next(status);
 }
 
-leveldb::Logger* LDB::getLogger(){
-    return options.ldb_options.info_log;
-}
+

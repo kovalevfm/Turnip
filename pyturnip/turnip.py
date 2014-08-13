@@ -39,41 +39,74 @@ class Turnip(object):
         self.context = zmq.Context(io_threads=io_threads)
         self.socket = self.context.socket(zmq.REQ)
         self.socket.connect("tcp://{0}:{1}".format(host, port))
+        self.unpacker = msgpack.Unpacker()
 
     def get(self, key, verify_checksums=False, fill_cache=True):
-        msg = msgpack.packb((Command.GET, [verify_checksums, fill_cache, key]))
-        self.socket.send(msg)
-        message = msgpack.unpackb(self.socket.recv())
-        status = Status(message[0])
-        if status.code != Status.codeOK:
-            return status, None
-        value = message[1]
-        return status, value
+        self.socket.send_multipart([msgpack.packb(Command.GET), msgpack.packb((verify_checksums, fill_cache)), msgpack.packb(key)])
+        res = []
+        while True:
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
+            for o in self.unpacker:
+                res.append(o)
+            if self.socket.getsockopt(zmq.EVENTS) & zmq.POLLIN == 0:
+                break
+        if len(res) == 1:
+            res.append(None)
+        return res
 
     def put(self, key, value, sync=False):
-        msg = msgpack.packb((Command.WRITE, [sync, [(False, key, value), ]]))
-        self.socket.send(msg)
-        message = msgpack.unpackb(self.socket.recv())
-        status = Status(message[0])
-        return status
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, )), msgpack.packb((False, key, value))])
+        res = []
+        while True:
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
+            for o in self.unpacker:
+                res.append(o)
+            if self.socket.getsockopt(zmq.EVENTS) & zmq.POLLIN == 0:
+                break
+        return res
 
     def delete(self, key, sync=False):
-        msg = msgpack.packb((Command.WRITE, [sync, [(True, key, ''), ]]))
-        self.socket.send(msg)
-        message = msgpack.unpackb(self.socket.recv())
-        status = Status(message[0])
-        return status
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, )), msgpack.packb((True, key, ''))])
+        res = []
+        while True:
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
+            for o in self.unpacker:
+                res.append(o)
+            if self.socket.getsockopt(zmq.EVENTS) & zmq.POLLIN == 0:
+                break
+        return res
 
     def write_batch(self, data, sync=False):
-        msg = msgpack.packb((Command.WRITE, [sync, [(False, key, value) for key, value in data]]))
-        self.socket.send(msg)
-        message = msgpack.unpackb(self.socket.recv())
-        status = Status(message[0])
-        return status
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))], flags=zmq.SNDMORE)
+        packer = msgpack.Packer()
+        for key, value in data:
+            self.socket.send(packer.pack((False, key, value)), flags=zmq.SNDMORE)
+        self.socket.send(zmq.Frame())
+        res = []
+        while True:
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
+            for o in self.unpacker:
+                res.append(o)
+            if self.socket.getsockopt(zmq.EVENTS) & zmq.POLLIN == 0:
+                break
+        return res
 
     def delete_batch(self, keys, sync=False):
-        msg = msgpack.packb((Command.WRITE, [sync, [(False, key, '') for key in keys]]))
-        self.socket.send(msg)
-        message = msgpack.unpackb(self.socket.recv())
-        status = Status(message[0])
-        return status
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))], flags=zmq.SNDMORE)
+        packer = msgpack.Packer()
+        for key in keys:
+            self.socket.send(packer.pack((True, key, '')), flags=zmq.SNDMORE)
+        self.socket.send(zmq.Frame())
+        res = []
+        while True:
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
+            for o in self.unpacker:
+                res.append(o)
+            if self.socket.getsockopt(zmq.EVENTS) & zmq.POLLIN == 0:
+                break
+        return res
