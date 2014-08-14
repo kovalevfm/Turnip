@@ -3,6 +3,9 @@
 #include <leveldb/iterator.h>
 #include <leveldb/comparator.h>
 
+#include <sstream>
+#include <iostream>
+
 
 LDB::LDB(Options& options_) : logger(options_.get_logger())
 {
@@ -34,6 +37,10 @@ void LDB::Write(Transport* t){
     WriteOptions wo = m.messsage.as<WriteOptions>();
     WriteOperation o;
     while(t->recv_next(&m)){
+
+        std::ostringstream oss;
+        oss << m.messsage;
+//        leveldb::Log(logger, "write to batch %s", oss.str().c_str());
         m.messsage.convert(&o);
         if (o.do_delete){
             batch.Delete(o.key);
@@ -41,6 +48,7 @@ void LDB::Write(Transport* t){
             batch.Put(o.key, o.value);
         }
     }
+//    leveldb::Log(logger, "done");
     Status status = db->Write(wo.get_leveldb_options(), &batch);
     t->send_next(status);
 }
@@ -58,7 +66,6 @@ void LDB::Range(Transport* t){
     it->Seek(begin_key);
     const leveldb::Comparator* cmp = leveldb::BytewiseComparator();
     while (it->Valid() && (end_key.size() == 0 || cmp->Compare(it->key(), leveldb::Slice(end_key)) <= 0) ){
-        leveldb::Log(logger, "send %s %s", std::string(it->key().data(), it->key().size()).c_str(), std::string(it->value().data(), it->value().size()).c_str());
         t->send_next(RangeValue(it.get()));
         it->Next();
     }

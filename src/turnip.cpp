@@ -10,6 +10,8 @@
 #include "transport.h"
 #include "ldb.h"
 
+int HWM = 100000000;
+
 
 void worker_routine (void *context, LDB* db, leveldb::Logger* logger)
 {
@@ -17,6 +19,7 @@ void worker_routine (void *context, LDB* db, leveldb::Logger* logger)
     Message m;
     while (true){
         t.recv_next(&m);
+//        leveldb::Log(logger, "write to batch %d", m.messsage.as<int>());
         try{
             switch(m.messsage.as<int>()){
             case (int)Command::GET:
@@ -60,15 +63,13 @@ int main (int argc, char *argv[])
 
     //  Socket to talk to clients
     void *clients = zmq_socket (context, ZMQ_ROUTER);
-
-
     //  Socket to talk to workers
     void *workers = zmq_socket (context, ZMQ_DEALER);
-    int cnt = 10000000;
-    zmq_setsockopt(clients, ZMQ_SNDHWM, &cnt, sizeof(int));
-    zmq_setsockopt(clients, ZMQ_RCVHWM, &cnt, sizeof(int));
-    zmq_setsockopt(workers, ZMQ_SNDHWM, &cnt, sizeof(int));
-    zmq_setsockopt(workers, ZMQ_RCVHWM, &cnt, sizeof(int));
+
+    zmq_setsockopt(clients, ZMQ_SNDHWM, &HWM, sizeof(int));
+    zmq_setsockopt(clients, ZMQ_RCVHWM, &HWM, sizeof(int));
+    zmq_setsockopt(workers, ZMQ_SNDHWM, &HWM, sizeof(int));
+    zmq_setsockopt(workers, ZMQ_RCVHWM, &HWM, sizeof(int));
     zmq_bind (clients, oss.str().c_str());
     zmq_bind (workers, "inproc://workers");
 

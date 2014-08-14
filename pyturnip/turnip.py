@@ -72,38 +72,38 @@ class Turnip(object):
         self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, )), msgpack.packb((True, key, '')), msgpack.packb(Command.END)])
         res = []
         while True:
-            buf = self.socket.recv_multipart()
-            self.unpacker.feed(''.join(buf[1:]))
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
             for o in self.unpacker:
                 if o == Command.END:
                     return res
                 res.append(o)
 
     def write_batch(self, data, sync=False):
-        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))])
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))], flags=zmq.SNDMORE)
         packer = msgpack.Packer()
         for key, value in data:
-            self.socket.send(packer.pack((False, key, value)))
+            self.socket.send(packer.pack((False, key, value)), flags=zmq.SNDMORE)
         self.socket.send(msgpack.packb(Command.END))
         res = []
         while True:
-            buf = self.socket.recv_multipart()
-            self.unpacker.feed(''.join(buf[1:]))
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
             for o in self.unpacker:
                 if o == Command.END:
                     return res
                 res.append(o)
 
     def delete_batch(self, keys, sync=False):
-        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))])
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))], flags=zmq.SNDMORE)
         packer = msgpack.Packer()
         for key in keys:
-            self.socket.send(packer.pack((True, key, '')))
+            self.socket.send(packer.pack((True, key, '')), flags=zmq.SNDMORE)
         self.socket.send(msgpack.packb(Command.END))
         res = []
         while True:
-            buf = self.socket.recv_multipart()
-            self.unpacker.feed(''.join(buf[1:]))
+            buf = self.socket.recv()
+            self.unpacker.feed(buf)
             for o in self.unpacker:
                 if o == Command.END:
                     return res

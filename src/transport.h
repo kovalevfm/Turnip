@@ -79,17 +79,6 @@ struct RangeValue{
 class Transport
 {
 public:
-    class Writer{
-    public:
-        Writer(void *socket_, leveldb::Logger* logger_, std::string* last_identity_);
-        void write(const char* buf, size_t buflen);
-        void commit();
-    private:
-        void *socket;
-        leveldb::Logger* logger;
-        std::string* last_identity;
-    };
-
     Transport(void *context, leveldb::Logger* logger_);
     bool recv_next(Message* message);
     template <typename T> void send_next(const T& v);
@@ -98,22 +87,22 @@ public:
     TransportState get_state(){return state;}
 
 private:
+    void write(const char* buf, size_t buflen);
+
     void *socket;
     std::string last_identity;
-    std::unique_ptr<Writer> writer;
     std::unique_ptr<msgpack::unpacker> unpacker;
-    std::unique_ptr<msgpack::packer<Writer> > packer;
     leveldb::Logger* logger;
     TransportState state;
     int more;
+    msgpack::sbuffer buffer;
 };
 
 template <typename T> void Transport::send_next(const T &v)
 {
-    msgpack::sbuffer buffer;
     msgpack::pack(buffer, v);
-    writer->write(buffer.data(), buffer.size());
-//    packer->pack(v);
+    write(buffer.data(), buffer.size());
+    buffer.clear();
 }
 
 

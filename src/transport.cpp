@@ -5,24 +5,10 @@
 #include <sstream>
 #include <iostream>
 
-inline std::string string_to_hex(const std::string& input){
-    static const char* const lut = "0123456789abcdef";
-    size_t len = input.length();
-    std::string output;
-    output.reserve(2 * len);
-    for (size_t i = 0; i < len; ++i)    {
-        const unsigned char c = input[i];
-        output.push_back(lut[c >> 4]);
-        output.push_back(lut[c & 15]);
-    }
-    return output;
-}
 
 Transport::Transport(void *context, leveldb::Logger *logger_)
     : socket(zmq_socket (context, ZMQ_DEALER))
-    , writer(new Writer(socket, logger_, &last_identity))
     , unpacker(new msgpack::unpacker())
-    , packer(new msgpack::packer<Writer>(*writer))
     , logger(logger_)
     , state(TransportState::RECIVE)
     , more(0)
@@ -77,16 +63,14 @@ bool Transport::recv_next(Message* message)
 }
 
 
-Transport::Writer::Writer(void *socket_, leveldb::Logger* logger_, std::string* last_identity_) :socket(socket_), logger(logger_), last_identity(last_identity_){}
 
-void Transport::Writer::write(const char *buf, size_t buflen)
+void Transport::write(const char *buf, size_t buflen)
 {
     if (buflen == 0){
         return;
     }
-    leveldb::Log(logger, "sent to %s -> %s", string_to_hex(*last_identity).c_str(), (buflen<10) ? string_to_hex(std::string(buf, buflen)).c_str() : std::string(buf, buflen).c_str());
-    int rc = zmq_send (socket, last_identity->data(), last_identity->size(), ZMQ_SNDMORE);
-    if (rc != (int)last_identity->size()){
+    int rc = zmq_send (socket, last_identity.data(), last_identity.size(), ZMQ_SNDMORE);
+    if (rc != (int)last_identity.size()){
         throw network_error("can't send message");
     }
     rc = zmq_send (socket, buf, buflen, 0);
