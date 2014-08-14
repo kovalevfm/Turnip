@@ -1,30 +1,56 @@
 #include "transport.h"
 #include <zmq.h>
+#include <leveldb/env.h>
 
+#include <sstream>
 #include <iostream>
 
-Transport::Transport(void *context)
-    : socket(zmq_socket (context, ZMQ_REP))
-    , more(1)
-    , writer(new Writer(socket))
+inline std::string string_to_hex(const std::string& input){
+    static const char* const lut = "0123456789abcdef";
+    size_t len = input.length();
+    std::string output;
+    output.reserve(2 * len);
+    for (size_t i = 0; i < len; ++i)    {
+        const unsigned char c = input[i];
+        output.push_back(lut[c >> 4]);
+        output.push_back(lut[c & 15]);
+    }
+    return output;
+}
+
+Transport::Transport(void *context, leveldb::Logger *logger_)
+    : socket(zmq_socket (context, ZMQ_DEALER))
+    , writer(new Writer(socket, logger_, &last_identity))
     , unpacker(new msgpack::unpacker())
     , packer(new msgpack::packer<Writer>(*writer))
+    , logger(logger_)
+    , state(TransportState::RECIVE)
+    , more(0)
 {
     zmq_connect (socket, "inproc://workers");
 }
 
-Message Transport::recv_next()
+bool Transport::recv_next(Message* message)
 {
+    if (state == TransportState::SEND){
+        return false;
+    }
+    state = TransportState::RECIVE;
     size_t more_size = sizeof (more);
     msgpack::unpacked result;
     while(true)
     {
         while (unpacker->next(&result)) {
-            return Message(result.zone().release(), result.get());
-        }
-        if (more == 0){
-            more = 1;
-            return Message(NULL, msgpack::object());
+            message->messsage = result.get();
+            message->zone = std::unique_ptr<msgpack::zone>(result.zone().release());
+            if (message->messsage.type == msgpack::type::POSITIVE_INTEGER && message->messsage.as<int>() == (int)Command::END){
+                state = TransportState::SEND;
+//                leveldb::Log(logger, "get END");
+                return false;
+            }
+            std::ostringstream oss;
+            oss << message->messsage;
+            return true;
         }
         zmq_msg_t part;
         int ret = zmq_msg_init (&part);
@@ -34,9 +60,13 @@ Message Transport::recv_next()
             zmq_msg_close (&part);
             throw network_error("socket read error");
         }
-        unpacker->reserve_buffer(zmq_msg_size(&part));
-        memcpy(unpacker->buffer(), zmq_msg_data(&part), zmq_msg_size(&part));
-        unpacker->buffer_consumed(zmq_msg_size(&part));
+        if (more == 0){
+            last_identity.assign((char*)zmq_msg_data(&part), zmq_msg_size(&part));
+        } else {
+            unpacker->reserve_buffer(zmq_msg_size(&part));
+            memcpy(unpacker->buffer(), zmq_msg_data(&part), zmq_msg_size(&part));
+            unpacker->buffer_consumed(zmq_msg_size(&part));
+        }
         ret = zmq_getsockopt (socket, ZMQ_RCVMORE, &more, &more_size);
         if (ret == -1){
             zmq_msg_close (&part);
@@ -47,45 +77,38 @@ Message Transport::recv_next()
 }
 
 
-void Transport::commit_message()
-{
-    writer->commit();
-}
-
-
-Transport::Writer::Writer(void *socket_) :socket(socket_){}
+Transport::Writer::Writer(void *socket_, leveldb::Logger* logger_, std::string* last_identity_) :socket(socket_), logger(logger_), last_identity(last_identity_){}
 
 void Transport::Writer::write(const char *buf, size_t buflen)
 {
-    int rc = zmq_send (socket, buf, buflen, ZMQ_SNDMORE);
+    if (buflen == 0){
+        return;
+    }
+    leveldb::Log(logger, "sent to %s -> %s", string_to_hex(*last_identity).c_str(), (buflen<10) ? string_to_hex(std::string(buf, buflen)).c_str() : std::string(buf, buflen).c_str());
+    int rc = zmq_send (socket, last_identity->data(), last_identity->size(), ZMQ_SNDMORE);
+    if (rc != (int)last_identity->size()){
+        throw network_error("can't send message");
+    }
+    rc = zmq_send (socket, buf, buflen, 0);
     if (rc != (int)buflen){
         throw network_error("can't send message");
     }
 }
 
-void Transport::Writer::commit()
-{
-    int rc = zmq_send (socket, NULL, 0, 0);
-    if (rc != 0){
-        throw network_error("can't commit message");
-    }
 
+void Transport::commit_message()
+{
+    send_next((int)Command::END);
+    state = TransportState::READY;
 }
 
 void Transport::read_tail(){
-    int event;
-    size_t event_size = sizeof (event);
-    int rc = zmq_getsockopt (socket, ZMQ_EVENTS, &event, &event_size);
-    assert (rc == 0);
-    while (event & ZMQ_POLLIN){
-        recv_next();
-        rc = zmq_getsockopt (socket, ZMQ_EVENTS, &event, &event_size);
-        assert (rc == 0);
-    }
-    if (more == 0){
-        recv_next();
+    Message m;
+    while (state == TransportState::RECIVE){
+        recv_next(&m);
     }
 }
+
 
 leveldb::WriteOptions WriteOptions::get_leveldb_options()
 {

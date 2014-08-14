@@ -18,6 +18,7 @@ public:
 
 private:
     leveldb::DB* db;
+    leveldb::Logger* logger;
 };
 
 #endif // LDB_H

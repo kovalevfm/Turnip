@@ -13,10 +13,10 @@
 
 void worker_routine (void *context, LDB* db, leveldb::Logger* logger)
 {
-    Transport t(context);
+    Transport t(context, logger);
     Message m;
     while (true){
-        m = t.recv_next();
+        t.recv_next(&m);
         try{
             switch(m.messsage.as<int>()){
             case (int)Command::GET:
@@ -60,10 +60,16 @@ int main (int argc, char *argv[])
 
     //  Socket to talk to clients
     void *clients = zmq_socket (context, ZMQ_ROUTER);
-    zmq_bind (clients, oss.str().c_str());
+
 
     //  Socket to talk to workers
     void *workers = zmq_socket (context, ZMQ_DEALER);
+    int cnt = 10000000;
+    zmq_setsockopt(clients, ZMQ_SNDHWM, &cnt, sizeof(int));
+    zmq_setsockopt(clients, ZMQ_RCVHWM, &cnt, sizeof(int));
+    zmq_setsockopt(workers, ZMQ_SNDHWM, &cnt, sizeof(int));
+    zmq_setsockopt(workers, ZMQ_RCVHWM, &cnt, sizeof(int));
+    zmq_bind (clients, oss.str().c_str());
     zmq_bind (workers, "inproc://workers");
 
     //  Launch pool of worker threads
