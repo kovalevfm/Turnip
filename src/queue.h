@@ -46,8 +46,6 @@ public:
         std::lock_guard<std::mutex> lck (mtx);
         queue.push(val);
         if (write(pipefd[1], &buf, 1) != 1) {throw std::ios_base::failure("bad write");}
-
-        std::unique_lock<std::mutex> lck_cv(mtx_cv);
         cv.notify_one();
     }
 
@@ -68,9 +66,9 @@ public:
 
     T block_pop(){
         while (true){
-            std::unique_lock<std::mutex> lck_cv(mtx_cv);
+//            std::lock_guard<std::mutex> lck (mtx);
+            std::unique_lock<std::mutex> lck_cv (mtx);
             while (queue.empty()) cv.wait(lck_cv);
-            std::lock_guard<std::mutex> lck (mtx);
             if (queue.size() > 0){
                 T t = queue.front();
                 queue.pop();
@@ -83,7 +81,7 @@ public:
 
 private:
     std::condition_variable cv;
-    std::mutex mtx_cv;
+//    std::mutex mtx_cv;
     std::queue<T> queue;
     int pipefd[2];
     std::mutex mtx;

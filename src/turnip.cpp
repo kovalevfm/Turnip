@@ -161,7 +161,7 @@ void wait_send(Queue<std::pair<std::string, std::string> >* q_in,  Queue<std::pa
     while (true){
         std::pair<std::string, std::string> res = q_in->block_pop();
         res.second += name;
-        std::cout<<res.second<<std::endl;
+//        std::cout<<res.second<<std::endl;
         q_out->push(res);
     }
 }
