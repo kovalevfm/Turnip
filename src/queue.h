@@ -11,6 +11,8 @@
 #include <condition_variable>
 
 
+#include <iostream>
+
 template<typename T>
 class Queue
 {
@@ -31,6 +33,7 @@ public:
         if (queue.size() > 0){
             queue.pop();
             if (read(pipefd[0], &buf, 1) != 1) {throw std::ios_base::failure("bad read");}
+            cv_pop.notify_one();
         }
     }
     T& front(){
@@ -44,40 +47,38 @@ public:
         std::lock_guard<std::mutex> lck (mtx);
         queue.push(val);
         if (write(pipefd[1], &buf, 1) != 1) {throw std::ios_base::failure("bad write");}
-        cv.notify_one();
+        cv_push.notify_one();
     }
 
     int get_fd(){
         return pipefd[0];
     }
 
-    void pop_front(T* t){
-        std::lock_guard<std::mutex> lck (mtx);
-        if (queue.size() > 0){
-            t = queue.front();
-            queue.pop();
-            if (read(pipefd[0], &buf, 1) != 1) {throw std::ios_base::failure("bad read");}
-            return true;
-        }
-        return false;
-    }
-
     T block_pop(){
         while (true){
             std::unique_lock<std::mutex> lck_cv (mtx);
-            while (queue.empty()) cv.wait(lck_cv);
+            while (queue.empty()) cv_push.wait(lck_cv);
             if (queue.size() > 0){
                 T t = queue.front();
                 queue.pop();
                 if (read(pipefd[0], &buf, 1) != 1) {throw std::ios_base::failure("bad read");}
+                cv_pop.notify_one();
                 return t;
             }
         }
     }
 
+    void block_push (const T& val){
+        std::unique_lock<std::mutex> lck_cv (mtx);
+        while (queue.size() > 60000) cv_pop.wait(lck_cv);
+        queue.push(val);
+        if (write(pipefd[1], &buf, 1) != 1) {throw std::ios_base::failure("bad write");}
+        cv_push.notify_one();
+    }
 
 private:
-    std::condition_variable cv;
+    std::condition_variable cv_push;
+    std::condition_variable cv_pop;
     std::queue<T> queue;
     int pipefd[2];
     std::mutex mtx;

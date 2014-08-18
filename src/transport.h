@@ -9,7 +9,6 @@
 #include "queue.h"
 
 enum class Command {END=0, GET=1, WRITE=2, RANGE=3};
-enum class TransportState {READY=0, RECIVE=1, SEND=2};
 enum class StatusCode {OK=0, NotFound=1, Corruption=2, NotSupported=3, InvalidArgument=4, IOError=5};
 
 class format_error : public std::bad_cast {
@@ -77,35 +76,6 @@ struct RangeValue{
     std::string value;
     MSGPACK_DEFINE(status, key, value)
 };
-
-//class Transport
-//{
-//public:
-//    Transport(void *context, leveldb::Logger* logger_);
-//    bool recv_next(Message* message);
-//    template <typename T> void send_next(const T& v);
-//    void commit_message();
-//    void read_tail();
-//    TransportState get_state(){return state;}
-
-//private:
-//    void write(const char* buf, size_t buflen);
-
-//    void *socket;
-//    std::string last_identity;
-//    std::unique_ptr<msgpack::unpacker> unpacker;
-//    leveldb::Logger* logger;
-//    TransportState state;
-//    int more;
-//    msgpack::sbuffer buffer;
-//};
-
-//template <typename T> void Transport::send_next(const T &v)
-//{
-//    msgpack::pack(buffer, v);
-//    write(buffer.data(), buffer.size());
-//    buffer.clear();
-//}
 
 
 class Transport

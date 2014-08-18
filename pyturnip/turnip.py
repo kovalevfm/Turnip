@@ -40,78 +40,72 @@ class Turnip(object):
     def __init__(self, host='localhost', port=5544, io_threads=1):
         self.context = zmq.Context(io_threads=io_threads)
         self.socket = self.context.socket(zmq.DEALER)
-        # self.socket.setsockopt(zmq.IDENTITY, msgpack.packb('abc'))
         self.socket.connect("tcp://{0}:{1}".format(host, port))
         self.unpacker = msgpack.Unpacker()
 
     def get(self, key, verify_checksums=False, fill_cache=True):
-        self.socket.send_multipart([msgpack.packb(Command.GET), msgpack.packb((verify_checksums, fill_cache)), msgpack.packb(key), msgpack.packb(Command.END)])
+        self.socket.send_multipart([msgpack.packb(Command.GET), msgpack.packb((verify_checksums, fill_cache)), msgpack.packb(key)])
         res = []
-        while True:
-            buf = self.socket.recv()
-            self.unpacker.feed(buf)
-            for o in self.unpacker:
-                if o == Command.END:
-                    if len(res) == 1:
-                        res.append(None)
-                    return res
-                res.append(o)
+        buf = self.socket.recv_multipart()
+        for b in buf:
+            self.unpacker.feed(b)
+        for o in self.unpacker:
+            res.append(o)
+        if len(res) == 1:
+            res.append(None)
+        return res
 
     def put(self, key, value, sync=False):
-        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, )), msgpack.packb((False, key, value)), msgpack.packb(Command.END)])
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, )), msgpack.packb((False, key, value))])
         res = []
-        while True:
-            buf = self.socket.recv()
-            self.unpacker.feed(buf)
-            for o in self.unpacker:
-                if o == Command.END:
-                    return res
-                res.append(o)
+        buf = self.socket.recv_multipart()
+        for b in buf:
+            self.unpacker.feed(b)
+        for o in self.unpacker:
+            res.append(o)
+        return res
 
     def delete(self, key, sync=False):
-        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, )), msgpack.packb((True, key, '')), msgpack.packb(Command.END)])
+        self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, )), msgpack.packb((True, key, ''))])
         res = []
-        while True:
-            buf = self.socket.recv()
-            self.unpacker.feed(buf)
-            for o in self.unpacker:
-                if o == Command.END:
-                    return res
-                res.append(o)
+        buf = self.socket.recv_multipart()
+        for b in buf:
+            self.unpacker.feed(b)
+        for o in self.unpacker:
+            res.append(o)
+        return res
 
     def write_batch(self, data, sync=False):
         self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))], flags=zmq.SNDMORE)
         packer = msgpack.Packer()
         for key, value in data:
             self.socket.send(packer.pack((False, key, value)), flags=zmq.SNDMORE)
-        self.socket.send(msgpack.packb(Command.END))
+        self.socket.send(zmq.Frame())
         res = []
-        while True:
-            buf = self.socket.recv()
-            self.unpacker.feed(buf)
-            for o in self.unpacker:
-                if o == Command.END:
-                    return res
-                res.append(o)
+        buf = self.socket.recv_multipart()
+        for b in buf:
+            self.unpacker.feed(b)
+        for o in self.unpacker:
+            res.append(o)
+        return res
 
     def delete_batch(self, keys, sync=False):
         self.socket.send_multipart([msgpack.packb(Command.WRITE), msgpack.packb((sync, ))], flags=zmq.SNDMORE)
         packer = msgpack.Packer()
         for key in keys:
             self.socket.send(packer.pack((True, key, '')), flags=zmq.SNDMORE)
-        self.socket.send(msgpack.packb(Command.END))
+        self.socket.send(zmq.Frame())
         res = []
-        while True:
-            buf = self.socket.recv()
-            self.unpacker.feed(buf)
-            for o in self.unpacker:
-                if o == Command.END:
-                    return res
-                res.append(o)
+        buf = self.socket.recv_multipart()
+        for b in buf:
+            self.unpacker.feed(b)
+        for o in self.unpacker:
+            res.append(o)
+        return res
 
-    def get_range(self, begin_key, end_key, verify_checksums=False, fill_cache=False):
+    def range(self, begin_key, end_key, verify_checksums=False, fill_cache=False):
         self.socket.send_multipart([msgpack.packb(Command.RANGE), msgpack.packb((verify_checksums, fill_cache)), msgpack.packb(begin_key),
-                                    msgpack.packb(end_key), msgpack.packb(Command.END)])
+                                    msgpack.packb(end_key)])
         while True:
             buf = self.socket.recv()
             self.unpacker.feed(buf)

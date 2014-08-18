@@ -30,6 +30,5 @@ private:
 
 };
 
-//Options loadOptions(const std::string& fname);
 
 #endif // OPTIONS_H

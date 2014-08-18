@@ -24,10 +24,11 @@ void LDB::Get(Transport* t){
     std::string result;
     Status status = db->Get(ro.get_leveldb_options(), m.messsage.as<std::string>(), &result);
     if (t->recv_next(&m)) {throw format_error("get too long request");}
-    t->send_next(status);
+    t->send_part(status);
     if (status.code == (int)StatusCode::OK){
-        t->send_next(result);
+        t->send_part(result);
     }
+    t->commit_message();
 }
 
 void LDB::Write(Transport* t){
@@ -37,9 +38,8 @@ void LDB::Write(Transport* t){
     WriteOptions wo = m.messsage.as<WriteOptions>();
     WriteOperation o;
     while(t->recv_next(&m)){
-
-        std::ostringstream oss;
-        oss << m.messsage;
+//        std::ostringstream oss;
+//        oss << m.messsage;
 //        leveldb::Log(logger, "write to batch %s", oss.str().c_str());
         m.messsage.convert(&o);
         if (o.do_delete){
@@ -50,7 +50,7 @@ void LDB::Write(Transport* t){
     }
 //    leveldb::Log(logger, "done");
     Status status = db->Write(wo.get_leveldb_options(), &batch);
-    t->send_next(status);
+    t->send_message(status);
 }
 
 void LDB::Range(Transport* t){
@@ -66,7 +66,12 @@ void LDB::Range(Transport* t){
     it->Seek(begin_key);
     const leveldb::Comparator* cmp = leveldb::BytewiseComparator();
     while (it->Valid() && (end_key.size() == 0 || cmp->Compare(it->key(), leveldb::Slice(end_key)) <= 0) ){
-        t->send_next(RangeValue(it.get()));
+//        std::ostringstream oss;
+//        oss << it->key().ToString() << " " << it->value().ToString();
+//        leveldb::Log(logger, "write to batch %s", oss.str().c_str());
+        t->send_message(RangeValue(it.get()));
         it->Next();
     }
+    t->send_message((int)Command::END);
+    leveldb::Log(logger, "send end");
 }
