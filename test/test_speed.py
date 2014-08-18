@@ -55,10 +55,10 @@ def test_write_batch(cnt, batch_size):
     print 'write ', sys.argv[1], time.time() - t, cnt / (time.time()-t)
 
 if __name__ == "__main__":
-    # test_write(10000)
-    # test_read(10000)
-    # test_read_one_key(10000)
-    # test_long(100000)
+    test_write(10000)
+    test_read(10000)
+    test_read_one_key(10000)
+    test_long(100000)
     test_write_batch(1000000, 50000)
     # tp = turnip.Turnip()
     # print tp.get("batch"+sys.argv[1]+str(12))

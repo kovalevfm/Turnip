@@ -25,7 +25,7 @@ bool Options::Load(const std::string& fname){
         cfg.read(f);
         if (!cfg.lookupValue("path", db_path)){db_path = "db";}
         if (!cfg.lookupValue("port", port)){port = 5544;}
-        if (!cfg.lookupValue("threads", threads_num)){threads_num = 1;}
+        if (!cfg.lookupValue("threads", threads_num)){threads_num = 2;}
         if (!cfg.lookupValue("log_file", log_file)){log_file = "turnip.log";}
         if (!cfg.lookupValue("create_if_missing", ldb_options.create_if_missing)){ldb_options.create_if_missing = true;}
         if (!cfg.lookupValue("error_if_exists", ldb_options.error_if_exists)){ldb_options.error_if_exists = false;}
