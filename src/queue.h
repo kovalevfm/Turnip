@@ -6,11 +6,9 @@
 #include <queue>
 #include <ios>
 #include <stdexcept>
-
-#include <thread>             // std::thread, std::this_thread::yield std::this_thread::sleep_for
-#include <mutex>              // std::mutex, std::unique_lock
-#include <condition_variable> // std::condition_variable
-#include <chrono>         // std::chrono::seconds
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 
 template<typename T>
@@ -66,7 +64,6 @@ public:
 
     T block_pop(){
         while (true){
-//            std::lock_guard<std::mutex> lck (mtx);
             std::unique_lock<std::mutex> lck_cv (mtx);
             while (queue.empty()) cv.wait(lck_cv);
             if (queue.size() > 0){
@@ -81,7 +78,6 @@ public:
 
 private:
     std::condition_variable cv;
-//    std::mutex mtx_cv;
     std::queue<T> queue;
     int pipefd[2];
     std::mutex mtx;
