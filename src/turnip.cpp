@@ -13,9 +13,13 @@
 #include "queue.h"
 #include "zmqwrapper.h"
 
-#include <iostream>
+#include <unistd.h>
 
-void worker_routine(Queue<std::pair<std::string, std::string> >* q_in,  Queue<std::pair<std::string, std::string> >* q_out, LDB* db, leveldb::Logger* logger){
+#include <iostream>
+#include <poll.h>
+
+
+void worker_routine(InQueue* q_in,  OutQueue* q_out, LDB* db, leveldb::Logger* logger){
     Transport t(q_in, q_out, logger);
     Message m;
     while (true){
@@ -54,8 +58,8 @@ int main (int argc, char *argv[])
     Options opt;
     if (!opt.Load(fname)){return -1;}
     LDB db(opt);
-    Queue<std::pair<std::string, std::string> > q_in;
-    Queue<std::pair<std::string, std::string> > q_out;
+    InQueue q_in(1000);
+    OutQueue q_out(1000);
     ZMQWrapper zmq_server(opt.get_port(), q_out.get_fd());
     std::string buff_identity;
     std::string buff_message;
@@ -66,20 +70,23 @@ int main (int argc, char *argv[])
         std::thread* tmp =new std::thread(worker_routine, &q_in, &q_out, &db, opt.get_logger());
         threads_vec.push_back(std::unique_ptr<std::thread>(tmp));
     }
+    leveldb::Log(opt.get_logger(), "start server...");
+    IdMesage buf;
     while (true){
         zmq_server.wait();
         if (zmq_server.recv_next(&buff_identity, &buff_message)){
-            q_in.push(std::make_pair(buff_identity, buff_message));
+            q_in.block_push(std::make_pair(buff_identity, buff_message));
         }
         if (!q_out.empty()){
-            if ( zmq_server.send_next(&q_out.front().first, &q_out.front().second)){
-                q_out.pop();
+            if (q_out.pop_nowait(buf)){
+                while (!zmq_server.send_next(&buf.first, &buf.second)){}
             }
         }
     }
     for (auto it = threads_vec.begin() ; it != threads_vec.end() ; ++ it){
         (*it)->join();
     }
+
     return 0;
 }
 

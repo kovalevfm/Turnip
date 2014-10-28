@@ -2,6 +2,12 @@
 #define ZMQWRAPPER_H
 #include <string>
 #include <zmq.h>
+#include <iostream>
+
+class network_error : public std::ios_base::failure {
+public:
+    network_error(const std::string& what) : std::ios_base::failure(what){}
+};
 
 class ZMQWrapper{
 public:

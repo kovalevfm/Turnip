@@ -22,10 +22,6 @@ private:
     std::string msg;
 };
 
-class network_error : public std::ios_base::failure {
-public:
-    network_error(const std::string& what) : std::ios_base::failure(what){}
-};
 
 struct WriteOptions{
     WriteOptions() : sync(false) {}
@@ -77,11 +73,14 @@ struct RangeValue{
     MSGPACK_DEFINE(status, key, value)
 };
 
+typedef std::pair<std::string, std::string> IdMesage;
+typedef Queue<IdMesage> InQueue;
+typedef FDQueue<IdMesage> OutQueue;
 
 class Transport
 {
 public:
-    Transport(Queue<std::pair<std::string, std::string> >* q_in_,  Queue<std::pair<std::string, std::string> >* q_out_, leveldb::Logger* logger_);
+    Transport(InQueue* q_in_,  OutQueue* q_out_, leveldb::Logger* logger_);
     void load_message();
     bool recv_next(Message* message);
     template <typename T> void send_message(const T& v);
@@ -94,8 +93,8 @@ private:
     msgpack::packer<msgpack::sbuffer> packer;
     leveldb::Logger* logger;
     std::string identity;
-    Queue<std::pair<std::string, std::string> >* q_in;
-    Queue<std::pair<std::string, std::string> >* q_out;
+    InQueue* q_in;
+    OutQueue* q_out;
 };
 
 template <typename T> void Transport::send_part(const T &v)

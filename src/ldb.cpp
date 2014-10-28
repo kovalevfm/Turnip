@@ -38,9 +38,6 @@ void LDB::Write(Transport* t){
     WriteOptions wo = m.messsage.as<WriteOptions>();
     WriteOperation o;
     while(t->recv_next(&m)){
-//        std::ostringstream oss;
-//        oss << m.messsage;
-//        leveldb::Log(logger, "write to batch %s", oss.str().c_str());
         m.messsage.convert(&o);
         if (o.do_delete){
             batch.Delete(o.key);
@@ -48,7 +45,6 @@ void LDB::Write(Transport* t){
             batch.Put(o.key, o.value);
         }
     }
-//    leveldb::Log(logger, "done");
     Status status = db->Write(wo.get_leveldb_options(), &batch);
     t->send_message(status);
 }
@@ -66,9 +62,6 @@ void LDB::Range(Transport* t){
     it->Seek(begin_key);
     const leveldb::Comparator* cmp = leveldb::BytewiseComparator();
     while (it->Valid() && (end_key.size() == 0 || cmp->Compare(it->key(), leveldb::Slice(end_key)) <= 0) ){
-//        std::ostringstream oss;
-//        oss << it->key().ToString() << " " << it->value().ToString();
-//        leveldb::Log(logger, "write to batch %s", oss.str().c_str());
         t->send_message(RangeValue(it.get()));
         it->Next();
     }

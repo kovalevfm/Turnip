@@ -10,9 +10,9 @@ override_dh_auto_install:
 	cp settings.conf debian/turnip/etc/turnip
 	mkdir -p debian/turnip/var/lib/turnip
 	cp -r init debian/turnip/etc/
+	mkdir -p debian/turnip/etc/init.d
+	ln -s /lib/init/upstart-job debian/turnip/etc/init.d/turnip
 	dh_auto_install $@
 
 %:
 	dh $@ 
-
-

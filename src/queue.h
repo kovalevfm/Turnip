@@ -2,23 +2,18 @@
 #define QUEUE_H
 #include <queue>
 #include <string>
-#include <unistd.h>
-#include <queue>
-#include <ios>
-#include <stdexcept>
-#include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <unistd.h>
+#include <sys/eventfd.h>
+#include <poll.h>
 
-
-#include <iostream>
 
 template<typename T>
 class Queue
 {
 public:
-    Queue(){
-        if (pipe(pipefd) == -1){throw std::ios_base::failure("can't open pipe");}
+    Queue(size_t max_size_ = 1000) : max_size(max_size_){
     }
 
     bool empty() const{
@@ -28,13 +23,15 @@ public:
     size_t size() const{
         return queue.size();
     }
-    void pop(){
+    bool pop_nowait(T& t){
         std::lock_guard<std::mutex> lck (mtx);
         if (queue.size() > 0){
+            t = queue.front();
             queue.pop();
-            if (read(pipefd[0], &buf, 1) != 1) {throw std::ios_base::failure("bad read");}
             cv_pop.notify_one();
+            return true;
         }
+        return false;
     }
     T& front(){
         return queue.front();
@@ -43,16 +40,16 @@ public:
     const T& front() const{
         return queue.front();
     }
-    void push (const T& val){
+    bool push_nowait (const T& val){
         std::lock_guard<std::mutex> lck (mtx);
+        if (queue.size() > max_size){
+            return false;
+        }
         queue.push(val);
-        if (write(pipefd[1], &buf, 1) != 1) {throw std::ios_base::failure("bad write");}
         cv_push.notify_one();
+        return true;
     }
 
-    int get_fd(){
-        return pipefd[0];
-    }
 
     T block_pop(){
         while (true){
@@ -61,7 +58,6 @@ public:
             if (queue.size() > 0){
                 T t = queue.front();
                 queue.pop();
-                if (read(pipefd[0], &buf, 1) != 1) {throw std::ios_base::failure("bad read");}
                 cv_pop.notify_one();
                 return t;
             }
@@ -70,9 +66,8 @@ public:
 
     void block_push (const T& val){
         std::unique_lock<std::mutex> lck_cv (mtx);
-        while (queue.size() > 60000) cv_pop.wait(lck_cv);
+        while (queue.size() > max_size) cv_pop.wait(lck_cv);
         queue.push(val);
-        if (write(pipefd[1], &buf, 1) != 1) {throw std::ios_base::failure("bad write");}
         cv_push.notify_one();
     }
 
@@ -80,10 +75,97 @@ private:
     std::condition_variable cv_push;
     std::condition_variable cv_pop;
     std::queue<T> queue;
-    int pipefd[2];
     std::mutex mtx;
-    char buf;
+    size_t max_size;
 };
+
+
+template<typename T>
+class FDQueue
+{
+public:
+    FDQueue(size_t max_size_ = 1000) : max_size(max_size_) {
+        int fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
+        fds.fd = fd;
+        fds.events = POLLIN;
+    }
+    ~FDQueue(){
+        close(fds.fd);
+    }
+
+    bool empty() const{
+        return queue.empty();
+    }
+
+    size_t size() const{
+        return queue.size();
+    }
+    bool pop_nowait(T& t){
+        uint64_t buf;
+        if (read(fds.fd, &buf, sizeof(uint64_t)) == sizeof(uint64_t)){
+            std::lock_guard<std::mutex> lck (mtx);
+            t = queue.front();
+            queue.pop();
+            cv_pop.notify_one();
+            return true;
+        }
+        return false;
+    }
+
+    T& front(){
+        return queue.front();
+    }
+
+    const T& front() const{
+        return queue.front();
+    }
+    bool push_nowait(const T& val){
+        std::lock_guard<std::mutex> lck (mtx);
+        if (queue.size() > max_size){
+            return false;
+        }
+        queue.push(val);
+        uint64_t buf = 1;
+        if (write(fds.fd, &buf, sizeof(uint64_t)) <=0) {throw std::ios_base::failure("bad write");}
+        return true;
+    }
+
+    int get_fd(){
+        return fds.fd;
+    }
+
+    T block_pop(){
+        uint64_t buf;
+        while (true){
+            int ret = poll(&fds, 1, -1);
+            if (ret == POLLIN){
+                std::unique_lock<std::mutex> lck (mtx);
+                if (read(fds.fd, &buf, 8) > 0){
+                    T t = queue.front();
+                    queue.pop();
+                    cv_pop.notify_one();
+                    return t;
+                }
+            }
+        }
+    }
+
+    void block_push (const T& val){
+        std::unique_lock<std::mutex> lck_cv (mtx);
+        while (queue.size() > max_size) cv_pop.wait(lck_cv);
+        queue.push(val);
+        uint64_t buf = 1;
+        if (write(fds.fd, &buf, sizeof(uint64_t)) <=0) {throw std::ios_base::failure("bad write");}
+    }
+
+private:
+    std::queue<T> queue;
+    std::condition_variable cv_pop;
+    struct pollfd fds;
+    std::mutex mtx;
+    size_t max_size;
+};
+
 
 #endif // QUEUE_H
 

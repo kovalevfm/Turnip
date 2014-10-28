@@ -1,11 +1,8 @@
 #include "zmqwrapper.h"
 #include <sstream>
 
-#include "transport.h"
 
-#include <iostream>
-
-int HWM = 10000;
+int HWM = 1000;
 int MANDATORY = 1;
 
 

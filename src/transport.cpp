@@ -6,7 +6,7 @@
 #include <iostream>
 
 
-Transport::Transport(Queue<std::pair<std::string, std::string> >* q_in_,  Queue<std::pair<std::string, std::string> >* q_out_, leveldb::Logger* logger_)
+Transport::Transport(InQueue* q_in_,  OutQueue* q_out_, leveldb::Logger* logger_)
     : packer(&buffer)
     , logger(logger_)
     , q_in(q_in_)
@@ -22,13 +22,13 @@ bool Transport::recv_next(Message* message){
     return false;
 }
 void Transport::commit_message(){
-    std::pair<std::string, std::string> res(identity, std::string(buffer.data(), buffer.size()));
+    IdMesage res(identity, std::string(buffer.data(), buffer.size()));
     q_out->block_push(res);
     buffer.clear();
 }
 
 void Transport::load_message(){
-    std::pair<std::string, std::string> msg = q_in->block_pop();
+    IdMesage msg = q_in->block_pop();
     identity = msg.first;
     unpacker.reserve_buffer(msg.second.size());
     memcpy(unpacker.buffer(), msg.second.data(), msg.second.size());
